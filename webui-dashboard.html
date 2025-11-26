@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MCP Web Dashboard</title>
+
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- React & ReactDOM CDN -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+
+  <!-- Babel for JSX support -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body class="bg-gray-50 min-h-screen p-6">
+
+  <div id="root"></div>
+
+  <script type="text/babel">
+    function MCPDashboard() {
+      const [serverUrl, setServerUrl] = React.useState("http://localhost:8000/mcp");
+      const [status, setStatus] = React.useState("disconnected");
+
+      const [tools, setTools] = React.useState([]);
+      const [resources, setResources] = React.useState([]);
+      const [prompts, setPrompts] = React.useState([]);
+
+      const [selectedTool, setSelectedTool] = React.useState("");
+      const [toolArgs, setToolArgs] = React.useState('{"a": 1, "b": 2}');
+      const [toolResult, setToolResult] = React.useState(null);
+
+      const [resourceUri, setResourceUri] = React.useState("greeting://Alice");
+      const [resourceResult, setResourceResult] = React.useState(null);
+
+      const [selectedPrompt, setSelectedPrompt] = React.useState("");
+      const [promptArgs, setPromptArgs] = React.useState('{"name": "Bob", "style": "friendly"}');
+      const [promptResult, setPromptResult] = React.useState(null);
+
+      const base = (url) => url.replace(/\/$/, "");
+
+      async function probeServer() {
+        setStatus("probing...");
+        try {
+          const url = base(serverUrl);
+
+          const [toolsRes, resourcesRes, promptsRes] = await Promise.all([
+            fetch(`${url}/tools`).then((r) => r.json()).catch(() => null),
+            fetch(`${url}/resources`).then((r) => r.json()).catch(() => null),
+            fetch(`${url}/prompts`).then((r) => r.json()).catch(() => null),
+          ]);
+
+          if (toolsRes && Array.isArray(toolsRes.items)) {
+            setTools(toolsRes.items.map((t) => t.name));
+            setStatus("connected");
+          } else {
+            setStatus("no-response");
+          }
+
+          if (resourcesRes && Array.isArray(resourcesRes.items)) {
+            setResources(resourcesRes.items.map((r) => r.uri));
+          }
+
+          if (promptsRes && Array.isArray(promptsRes.items)) {
+            setPrompts(promptsRes.items.map((p) => p.name));
+          }
+        } catch (err) {
+          setStatus("error");
+        }
+      }
+
+      async function callTool() {
+        try {
+          const args = JSON.parse(toolArgs);
+          const res = await fetch(`${base(serverUrl)}/tools/${selectedTool}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ args }),
+          });
+          setToolResult(await res.json());
+        } catch (err) {
+          setToolResult({ error: String(err) });
+        }
+      }
+
+      async function fetchResource() {
+        try {
+          const res = await fetch(`${base(serverUrl)}/resources?uri=${encodeURIComponent(resourceUri)}`);
+          setResourceResult(await res.json());
+        } catch (err) {
+          setResourceResult({ error: String(err) });
+        }
+      }
+
+      async function callPrompt() {
+        try {
+          const args = JSON.parse(promptArgs);
+          const res = await fetch(`${base(serverUrl)}/prompts/${selectedPrompt}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ args }),
+          });
+          setPromptResult(await res.json());
+        } catch (err) {
+          setPromptResult({ error: String(err) });
+        }
+      }
+
+      return (
+        <div className="max-w-4xl mx-auto bg-white shadow-md rounded-2xl p-6">
+          <h1 className="text-2xl font-bold mb-4">MCP Web Dashboard (Static HTML)</h1>
+
+          {/* Server URL */}
+          <section className="mb-6">
+            <label className="block text-sm font-medium">MCP Server URL</label>
+            <div className="flex gap-2 mt-2">
+              <input className="flex-1 border rounded px-3 py-2" value={serverUrl} onChange={(e) => setServerUrl(e.target.value)} />
+              <button onClick={probeServer} className="px-4 py-2 bg-indigo-600 text-white rounded">Probe</button>
+            </div>
+            <p className="mt-2 text-gray-600 text-sm">Status: <b>{status}</b></p>
+          </section>
+
+          <div className="grid md:grid-cols-2 gap-6">
+
+            {/* Tools */}
+            <div className="p-4 border rounded-lg">
+              <h2 className="font-semibold">Tools</h2>
+              <select className="w-full border rounded p-2 mt-2" value={selectedTool} onChange={(e) => setSelectedTool(e.target.value)}>
+                <option value="">-- select tool --</option>
+                {tools.map((t) => <option key={t}>{t}</option>)}
+              </select>
+              <textarea className="w-full border rounded p-2 mt-2" value={toolArgs} onChange={(e) => setToolArgs(e.target.value)} />
+              <button className="px-3 py-2 bg-green-600 text-white rounded mt-2" onClick={callTool}>Call Tool</button>
+              <pre className="bg-gray-100 p-3 rounded text-sm mt-3">{JSON.stringify(toolResult, null, 2)}</pre>
+            </div>
+
+            {/* Resources */}
+            <div className="p-4 border rounded-lg">
+              <h2 className="font-semibold">Resources</h2>
+              <input className="w-full border rounded p-2 mt-2" value={resourceUri} onChange={(e) => setResourceUri(e.target.value)} />
+              <button className="px-3 py-2 bg-blue-600 text-white rounded mt-2" onClick={fetchResource}>Get Resource</button>
+              <pre className="bg-gray-100 p-3 rounded text-sm mt-3">{JSON.stringify(resourceResult, null, 2)}</pre>
+            </div>
+
+            {/* Prompts */}
+            <div className="p-4 border rounded-lg md:col-span-2">
+              <h2 className="font-semibold">Prompts</h2>
+              <select className="w-full border rounded p-2 mt-2" value={selectedPrompt} onChange={(e) => setSelectedPrompt(e.target.value)}>
+                <option value="">-- select prompt --</option>
+                {prompts.map((p) => <option key={p}>{p}</option>)}
+              </select>
+              <textarea className="w-full border rounded p-2 mt-2" value={promptArgs} onChange={(e) => setPromptArgs(e.target.value)} />
+              <button className="px-3 py-2 bg-purple-600 text-white rounded mt-2" onClick={callPrompt}>Call Prompt</button>
+              <pre className="bg-gray-100 p-3 rounded text-sm mt-3">{JSON.stringify(promptResult, null, 2)}</pre>
+            </div>
+
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<MCPDashboard />);
+  </script>
+
+</body>
+</html>
