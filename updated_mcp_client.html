@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FastAPI Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body class="bg-gray-50 min-h-screen p-6">
+
+  <div id="root"></div>
+
+  <script type="text/babel">
+    function Dashboard() {
+      const [serverBaseUrl, setServerBaseUrl] = React.useState("http://localhost:8000");
+      const [status, setStatus] = React.useState("disconnected");
+
+      // Tool (multiply) state
+      const [xValue, setXValue] = React.useState(5);
+      const [yValue, setYValue] = React.useState(3);
+      const [multiplyResult, setMultiplyResult] = React.useState(null);
+      const [multiplyLoading, setMultiplyLoading] = React.useState(false);
+
+      // Resource (read-text) state
+      const [textResult, setTextResult] = React.useState(null);
+      const [textLoading, setTextLoading] = React.useState(false);
+
+      const [errorLog, setErrorLog] = React.useState([]);
+
+      function logError(message) {
+        console.error(message);
+        setErrorLog(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${message}`]);
+      }
+
+      function logInfo(message) {
+        console.log(message);
+      }
+
+      async function testConnection() {
+        setErrorLog([]);
+        logInfo("Testing server connection...");
+        
+        try {
+          const rootUrl = `${serverBaseUrl}/`;
+          logInfo(`Testing root endpoint: ${rootUrl}`);
+          
+          const rootRes = await fetch(rootUrl);
+          logInfo(`Root check: ${rootRes.status} ${rootRes.statusText}`);
+          
+          if (rootRes.ok) {
+            const rootData = await rootRes.json();
+            logInfo(`Server response: ${JSON.stringify(rootData)}`);
+            setStatus("connected");
+            alert("✅ Server is reachable!\n\nEndpoints:\n- POST /multiply\n- GET /read-text");
+          } else {
+            throw new Error(`Server returned ${rootRes.status}`);
+          }
+          
+        } catch (err) {
+          logError(`Connection test failed: ${err.message}`);
+          setStatus("error: " + err.message);
+          alert(`❌ Connection failed: ${err.message}\n\nMake sure your FastAPI server is running on ${serverBaseUrl}`);
+        }
+      }
+
+      async function callMultiply() {
+        setMultiplyLoading(true);
+        setErrorLog([]);
+        
+        try {
+          const url = `${serverBaseUrl}/multiply`;
+          logInfo(`Calling POST ${url}`);
+          
+          const response = await fetch(url, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              x: parseFloat(xValue),
+              y: parseFloat(yValue)
+            })
+          });
+
+          logInfo(`Response status: ${response.status}`);
+          
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
+          }
+
+          const data = await response.json();
+          logInfo(`Result: ${JSON.stringify(data)}`);
+          setMultiplyResult(data);
+          
+        } catch (err) {
+          const errorMsg = err.message || String(err);
+          setMultiplyResult({ error: errorMsg });
+          logError(`Multiply failed: ${errorMsg}`);
+        } finally {
+          setMultiplyLoading(false);
+        }
+      }
+
+      async function readText() {
+        setTextLoading(true);
+        setErrorLog([]);
+        
+        try {
+          const url = `${serverBaseUrl}/read-text`;
+          logInfo(`Calling GET ${url}`);
+          
+          const response = await fetch(url);
+          
+          logInfo(`Response status: ${response.status}`);
+          
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
+          }
+
+          const data = await response.json();
+          logInfo(`Result: ${JSON.stringify(data)}`);
+          setTextResult(data);
+          
+        } catch (err) {
+          const errorMsg = err.message || String(err);
+          setTextResult({ error: errorMsg });
+          logError(`Read text failed: ${errorMsg}`);
+        } finally {
+          setTextLoading(false);
+        }
+      }
+
+      return (
+        <div className="max-w-5xl mx-auto bg-white shadow-md rounded-2xl p-6">
+          <h1 className="text-3xl font-bold mb-2 text-indigo-600">FastAPI Dashboard</h1>
+          <p className="text-gray-600 mb-6">Direct endpoint testing for your FastAPI server</p>
+
+          {/* Server URL */}
+          <section className="mb-6 p-4 bg-gray-50 rounded-lg border">
+            <label className="block text-sm font-medium mb-2">Server Base URL</label>
+            <div className="flex gap-2">
+              <input 
+                className="flex-1 border rounded px-3 py-2" 
+                value={serverBaseUrl} 
+                onChange={(e) => setServerBaseUrl(e.target.value)} 
+                placeholder="http://localhost:8000"
+              />
+              <button 
+                onClick={testConnection} 
+                className="px-6 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition"
+              >
+                Test Connection
+              </button>
+            </div>
+            <div className="mt-2">
+              <p className="text-sm">
+                Status: <span className={`font-semibold ${status === 'connected' ? 'text-green-600' : status.startsWith('error') ? 'text-red-600' : 'text-gray-600'}`}>{status}</span>
+              </p>
+            </div>
+            <div className="mt-2 text-xs text-gray-500 space-y-1">
+              <div>Tool endpoint: POST {serverBaseUrl}/multiply</div>
+              <div>Resource endpoint: GET {serverBaseUrl}/read-text</div>
+            </div>
+          </section>
+
+          {/* Error Log */}
+          {errorLog.length > 0 && (
+            <section className="mb-6 p-4 bg-red-50 rounded-lg border border-red-200">
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="font-semibold text-red-700">Error Log</h3>
+                <button 
+                  onClick={() => setErrorLog([])}
+                  className="text-xs text-red-600 hover:text-red-800"
+                >
+                  Clear
+                </button>
+              </div>
+              <div className="text-xs text-red-600 max-h-32 overflow-auto font-mono">
+                {errorLog.map((log, idx) => (
+                  <div key={idx}>{log}</div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          <div className="grid md:grid-cols-2 gap-6">
+
+            {/* Tool: Multiply Numbers */}
+            <div className="p-4 border-2 border-green-200 rounded-lg bg-green-50">
+              <h2 className="font-bold text-lg text-green-700 mb-3">🛠️ Tool: Multiply Numbers</h2>
+              <p className="text-xs text-gray-600 mb-4">POST /multiply</p>
+              
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">X Value</label>
+                  <input 
+                    type="number"
+                    className="w-full border-2 border-green-300 rounded p-2" 
+                    value={xValue}
+                    onChange={(e) => setXValue(e.target.value)}
+                    step="0.1"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Y Value</label>
+                  <input 
+                    type="number"
+                    className="w-full border-2 border-green-300 rounded p-2" 
+                    value={yValue}
+                    onChange={(e) => setYValue(e.target.value)}
+                    step="0.1"
+                  />
+                </div>
+
+                <button 
+                  className="w-full px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition font-medium disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2" 
+                  onClick={callMultiply}
+                  disabled={multiplyLoading}
+                >
+                  {multiplyLoading ? (
+                    <>
+                      <span className="animate-spin">⏳</span>
+                      Calling...
+                    </>
+                  ) : (
+                    'Call Multiply'
+                  )}
+                </button>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Result</label>
+                  <pre className="bg-white border-2 border-green-300 p-3 rounded text-xs overflow-auto max-h-48">
+                    {multiplyResult ? JSON.stringify(multiplyResult['product'], null, 2) : 'No result yet'}
+                  </pre>
+                </div>
+              </div>
+            </div>
+
+            {/* Resource: Read Text File */}
+            <div className="p-4 border-2 border-blue-200 rounded-lg bg-blue-50">
+              <h2 className="font-bold text-lg text-blue-700 mb-3">📦 Resource: Read Text File</h2>
+              <p className="text-xs text-gray-600 mb-4">GET /read-text</p>
+              
+              <div className="space-y-3">
+                <div className="p-3 bg-white border border-blue-200 rounded text-sm">
+                  <strong>File path:</strong> data/message.txt
+                  <div className="text-xs text-gray-600 mt-1">
+                    This endpoint reads the content of your local text file.
+                  </div>
+                </div>
+
+                <button 
+                  className="w-full px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition font-medium disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2" 
+                  onClick={readText}
+                  disabled={textLoading}
+                >
+                  {textLoading ? (
+                    <>
+                      <span className="animate-spin">⏳</span>
+                      Reading...
+                    </>
+                  ) : (
+                    'Read Text File'
+                  )}
+                </button>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Result</label>
+                  <pre className="bg-white border-2 border-blue-300 p-3 rounded text-xs overflow-auto max-h-64 whitespace-pre-wrap">
+                    {textResult ? JSON.stringify(textResult['content'], null, 2) : 'No result yet'}
+                  </pre>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          {/* Quick Info */}
+          <section className="mt-6 p-4 bg-indigo-50 rounded-lg border border-indigo-200">
+            <h3 className="font-semibold text-indigo-700 mb-2">ℹ️ About This Dashboard</h3>
+            <div className="text-sm text-gray-700 space-y-1">
+              <p>This dashboard directly calls your FastAPI endpoints:</p>
+              <ul className="list-disc list-inside ml-2 space-y-1">
+                <li><strong>POST /multiply</strong> - Multiplies two numbers (x, y)</li>
+                <li><strong>GET /read-text</strong> - Reads content from data/message.txt</li>
+              </ul>
+              <p className="mt-2 text-xs text-gray-600">
+                No MCP protocol layer needed - just direct HTTP requests to your endpoints.
+              </p>
+            </div>
+          </section>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<Dashboard />);
+  </script>
+
+</body>
+</html>
